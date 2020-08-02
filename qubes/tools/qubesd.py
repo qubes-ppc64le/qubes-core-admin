@@ -13,6 +13,7 @@ import qubes.api.internal
 import qubes.api.misc
 import qubes.log
 import qubes.utils
+import qubes.tools
 import qubes.vm.qubesvm
 
 def sighandler(loop, signame, servers):
