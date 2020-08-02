@@ -214,7 +214,7 @@ class VMMConnection:
     def xs(self):
         """Connection to Xen Store
 
-        This property in available only when running on Xen.
+        This property is available only when running on Xen.
         """
 
         # XXX what about the case when we run under KVM,
@@ -230,7 +230,7 @@ class VMMConnection:
     def xc(self):
         """Connection to Xen
 
-        This property in available only when running on Xen.
+        This property is available only when running on Xen.
         """
 
         # XXX what about the case when we run under KVM,
