@@ -97,7 +97,7 @@ Requires:       libvirt-daemon-kvm >= 3.3.0-7
 Requires:       cronie
 Requires:       scrypt
 # for qubes-hcl-report
-Requires:       dmidecode
+#Requires:       dmidecode
 
 # qubesd socket protocol
 Conflicts:      python3-qubesadmin < 4.1.6
