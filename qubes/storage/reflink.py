@@ -32,13 +32,24 @@ import logging
 import os
 import subprocess
 import tempfile
+import platform
 from contextlib import contextmanager, suppress
 
 import qubes.storage
 import qubes.utils
 
-FICLONE = 1074041865        # defined in <linux/fs.h>, assuming sizeof(int)==4
-LOOP_SET_CAPACITY = 0x4C07  # defined in <linux/loop.h>
+HOST_MACHINE = platform.machine()
+
+if HOST_MACHINE == "x86_64":
+    FICLONE = 1074041865        # defined in <linux/fs.h>, assuming sizeof(int)==4
+    LOOP_SET_CAPACITY = 0x4C07  # defined in <linux/loop.h>
+elif HOST_MACHINE == "ppc64le":
+    FICLONE = -2147183607
+    LOOP_SET_CAPACITY = 0x4C07
+else:
+    print("Missing IOCTL definitions for platform {}".format(HOST_MACHINE))
+    sys.exit(1)
+
 LOGGER = logging.getLogger('qubes.storage.reflink')
 
 
