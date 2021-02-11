@@ -1,0 +1,333 @@
+
+<domain type='kvm'>
+    {% block basic %}
+        <name>{{ vm.name }}</name>
+        <uuid>{{ vm.uuid }}</uuid>
+        {# PLACEHOLDER
+        <metadata>
+            <libosinfo:libosinfo xmlns:libosinfo='http://libosinfo.org/xmlns/libvirt/domain/1.0'>
+                <libosinfo:os id='http://fedoraproject.org/fedora/32'/>
+            </libosinfo:libosinfo>
+        </metadata>
+        #}
+        {% if ((vm.virt_mode == 'hvm' and vm.devices['pci'].persistent() | list)
+            or vm.maxmem == 0) -%}
+            <memory unit='MiB'>{{ vm.memory }}</memory>
+        {% else -%}
+            <memory unit='MiB'>{{ vm.maxmem }}</memory>
+        {% endif -%}
+        <currentMemory unit='MiB'>{{ vm.memory }}</currentMemory>
+        <vcpu placement='static'>{{ vm.vcpus }}</vcpu>
+    {% endblock %}
+
+    {% block cpu %}
+        <cpu mode='host-passthrough' check='none'/>
+    {% endblock %}
+
+    <os>
+        {% block os %}
+            <type arch='ppc64le' machine='pseries'>hvm</type>
+            <!-- <boot dev='hd'/> -->
+            <kernel>{{ vm.storage.kernels_dir }}/vmlinuz</kernel>
+            <initrd>{{ vm.storage.kernels_dir }}/initramfs</initrd>
+
+
+            {# PLACEHOLDER
+            {% if vm.kernel %}
+                {% if vm.features.check_with_template('no-default-kernelopts', False) -%}
+                <cmdline>{{ vm.kernelopts }}</cmdline>
+                {% else -%}
+                <cmdline>{{ vm.kernelopts_common }}{{ vm.kernelopts }}</cmdline>
+                {% endif -%}
+            {% endif %}
+            #}
+        {% endblock %}
+    </os>
+
+    {% block clock %}
+        {% set timezone = vm.features.check_with_template('timezone', 'localtime').lower() %}
+        {% if timezone == 'localtime' %}
+            <clock offset='variable' adjustment='0' basis='localtime'>
+        {% elif timezone.isdigit() %}
+            <clock offset='variable' adjustment='{{ timezone }}' basis='utc'>
+        {% else %}
+            <clock offset='variable' adjustment='0' basis='utc'>
+        {% endif %}
+            </clock>
+    {% endblock %}
+
+    {% block on %}
+        <on_poweroff>destroy</on_poweroff>
+        <on_reboot>destroy</on_reboot>
+        <on_crash>destroy</on_crash>
+    {% endblock %}
+
+    <devices>
+        {#- NOT IMPLEMENTED -#}
+        {%- block device_controllers %}
+        <!-- === BUS 00 ==================================================== -->
+        <controller type='pci' index='0' model='pci-root'>
+          <model name='spapr-pci-host-bridge'/>
+          <target index='0'/>
+          </controller>
+
+        <!-- Separate spapr-pci-host-bridge for libkvmchan hotplug -->
+        <controller type='pci' index='1' model='pci-root'>
+          <model name='spapr-pci-host-bridge'/>
+          <target index='1'/>
+        </controller>
+
+        <!-- SATA (Reserved Address) -->
+        <!--
+        <controller type='sata' index='0'>
+            <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x2'/>
+        </controller>
+        -->
+
+        <!-- === BUS 01 ==================================================== -->
+        <!-- PCIE-PCI-BRIDGE -->
+        <!--
+        <controller type='pci' index='9' model='pcie-to-pci-bridge'>
+            <model name='pcie-pci-bridge'/>
+            <alias name='pci.0'/>
+            <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+        </controller>
+        -->
+
+        <!--
+        <controller type='pci' model='pcie-root'/>
+        <controller type='pci' model='pcie-root-port'/>
+        <controller type='pci' model='pcie-root-port'/>
+        <controller type='pci' model='pcie-root-port'/>
+        <controller type='pci' model='pcie-root-port'/>
+        <controller type='pci' model='pcie-root-port'/>
+        <controller type='pci' model='pcie-root-port'/>
+        <controller type='pci' model='pcie-root-port'/>
+        <controller type='pci' model='pcie-root-port'/>
+        <controller type='pci' model='pcie-to-pci-bridge'/>
+        -->
+
+        <!-- === BUS 03 ==================================================== -->
+        <!-- USB -->
+        <controller type='usb' index='0' model='qemu-xhci' ports='15'>
+            <!--
+            <address type='pci' domain='0x0000' bus='0x03' slot='0x00' function='0x0'/>
+            -->
+        </controller>
+
+        <!-- === BUS 04 ==================================================== -->
+        <!-- VIRTIO-SERIAL -->
+        <controller type='virtio-serial' index='0'>
+            <!--
+            <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
+            -->
+        </controller>
+        {%- endblock %}
+
+        <!--
+        <interface type='network'>
+            <mac address='52:54:00:b5:03:6d'/>
+            <source network='default'/>
+            <model type='virtio'/>
+            <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+            <mac address='{{ vm.mac }}' />
+            <ip address='{{ vm.get_ip_for_vm(vm) }}' />
+        </interface>
+        -->
+
+        <!-- === BUS 02 ==================================================== -->
+        <!--
+        <interface type='network'>
+            <model type='virtio'/>
+            <source network='default'/>
+            <address type='pci' domain='0x0000' bus='0x02' slot='0x00' function='0x0'/>
+        </interface>
+        -->
+
+        {%- block devices %}
+        {#-
+            HACK: The letter counter is implemented in this way because
+            Jinja does not allow you to increment variables in a loop
+            anymore. As of Jinja 2.10, we will be able to replace this
+            with:
+            {% set counter = namespace(i=0) %}
+            {% set counter.i = counter.i + 1 %}
+        #}
+        {%- set counter = {'i': 0} %}
+        {# TODO Allow more volumes out of the box #}
+        {%- set dd = ['e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+            'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
+        %}
+
+        {#-
+        DISK.TYPE:
+            Valid values are 'file', 'block', 'dir', 'network', 'volume', or
+            'nvme'.
+
+        DRIVER:
+            xen supports a name of 'tap', 'tap2', 'phy', or 'file', with a type
+            of 'aio'.
+
+            qemu only supports a name of 'qemu', but multiple types including
+            'raw', 'bochs', 'qcow2', and 'qed'.
+        #}
+        <!-- === BUS 05 ==================================================== -->
+        {%- for device in vm.block_devices %}
+        <disk type='file' device='{{ device.devtype }}'>
+            <driver name='qemu' type='raw' />
+            <source file='{{ device.path }}' />
+
+            {%- if device.name == 'root' %}
+            <target dev='vda' bus='virtio' />
+            <!--
+            <address type='pci' domain='0x0000' bus='0x05' slot='0x00' function='0x0'/>
+            -->
+
+            {%- elif device.name == 'private' %}
+            <target dev='vdb' bus='virtio' />
+            <!--
+            <address type='pci' domain='0x0000' bus='0x05' slot='0x00' function='0x1'/>
+            -->
+
+            {%- elif device.name == 'volatile' %}
+            <target dev='vdc' bus='virtio' />
+            <!--
+            <address type='pci' domain='0x0000' bus='0x05' slot='0x00' function='0x2'/>
+            -->
+
+            {%- elif device.name == 'kernel' %}
+            <target dev='vdd' bus='virtio' />
+            <!--
+            <address type='pci' domain='0x0000' bus='0x05' slot='0x00' function='0x3'/>
+            -->
+
+            {%- else %}
+            {# XXX:  FIX:  Only allows up to 8 devices total #}
+            <target dev='vd{{dd[counter.i]}}' bus='virto' />
+            <!--
+            <address type='pci' domain='0x0000' bus='0x05' slot='0x00' function='0x{{dd[counter.i+4]}}'/>
+            -->
+            {% if counter.update({'i': counter.i + 1}) %}{% endif %}
+            {%-endif %}
+
+            {%- if not device.rw %}
+            <readonly />
+            {%- endif %}
+
+            {%- if device.domain %}
+            <backenddomain name='{{ device.domain }}' />
+            {%- endif %}
+
+            {%- if device.script %}
+            <script path='{{ device.script }}' />
+            {%- endif %}
+        </disk>
+        {%- endfor -%}
+
+            {# start external devices from xvdi #}
+            {% set counter = {'i': 4} %}
+            {% for assignment in vm.devices.block.assignments(True) %}
+                {% set device = assignment.device %}
+                {% set options = assignment.options %}
+                {% include 'libvirt/devices/block.xml' %}
+            {% endfor %}
+
+            {% if vm.netvm %}
+                {# TODO: #}
+                {# include 'libvirt/devices/net.xml' with context #}
+                <interface type='network'>
+                    <mac address='{{ vm.mac }}' />
+                    <ip address='{{ vm.ip }}' />
+                    <backenddomain name='{{ vm.netvm.name }}' />
+                    <!--script path='vif-route-qubes' /-->
+                    <source network='default'/>
+                    <model type='virtio'/>
+                    <!--
+                    <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+                    -->
+                </interface>
+            {% endif %}
+
+            {% for assignment in vm.devices.pci.assignments(True) %}
+                {% set device = assignment.device %}
+                {% set options = assignment.options %}
+                {% include 'libvirt/devices/pci.xml' %}
+            {% endfor %}
+
+            <channel type='unix'>
+              <target type='virtio' name='org.qemu.guest_agent.0'/>
+              <address type='virtio-serial' controller='0' bus='0' port='1'/>
+            </channel>
+
+            {% if vm.virt_mode == 'hvm' %}
+                <!-- server_ip is the address of stubdomain. It hosts it's own DNS server. -->
+                {# TODO:
+                <emulator
+                    {% if vm.features.check_with_template('linux-stubdom', True) %}
+                        type='stubdom-linux'
+                    {% else %}
+                        type='stubdom'
+                    {% endif %}
+                    {% if vm.netvm %}
+                      {% if vm.features.check_with_template('linux-stubdom', True) %}
+                        cmdline='-qubes-net:client_ip={{ vm.ip -}}
+                            ,dns_0={{ vm.dns[0] -}}
+                            ,dns_1={{ vm.dns[1] -}}
+                            ,gw={{ vm.netvm.gateway -}}
+                            ,netmask={{ vm.netmask }}'
+                      {% else %}
+                        cmdline='-net lwip,client_ip={{ vm.ip -}}
+                            ,server_ip={{ vm.dns[1] -}}
+                            ,dns={{ vm.dns[0] -}}
+                            ,gw={{ vm.netvm.gateway -}}
+                            ,netmask={{ vm.netmask }}'
+                      {% endif %}
+                    {% endif %}
+                    {% if vm.stubdom_mem %}
+                        memory='{{ vm.stubdom_mem * 1024 -}}'
+                    {% endif %}
+                />
+                #}
+                <emulator>/usr/bin/qemu-system-ppc64</emulator>
+
+                <input type='tablet' bus='usb'>
+                    <address type='usb' bus='0' port='1'/>
+                </input>
+                <input type='mouse' bus='ps2'/>
+                <input type='keyboard' bus='ps2'/>
+
+                {% if vm.features.check_with_template('audio-model', False) %}
+                    <sound model='{{ vm.features.check_with_template('audio-model', False) }}'>
+                        <address type='pci' domain='0x0000' bus='0x00' slot='0x1b' function='0x0'/>
+                    </sound>
+                {% endif %}
+            {% endif %}
+
+            <serial type='pty'>
+              <target type='spapr-vio-serial' port='0'>
+                <model name='spapr-vty'/>
+              </target>
+              <address type='spapr-vio' reg='0x30000000'/>
+            </serial>
+            <console type='pty'>
+              <target type='serial' port='0'/>
+              <address type='spapr-vio' reg='0x30000000'/>
+            </console>
+
+            <memballoon model='virtio'>
+                <!--
+                <address type='pci' domain='0x0000' bus='0x06' slot='0x00' function='0x0'/>
+                -->
+            </memballoon>
+
+            <rng model='virtio'>
+                <backend model='random'>/dev/urandom</backend>
+                <!--
+                <address type='pci' domain='0x0000' bus='0x07' slot='0x00' function='0x0'/>
+                -->
+            </rng>
+        {% endblock %}
+    </devices>
+</domain>
+
+<!-- vim: set ft=jinja ts=4 sts=4 sw=4 et tw=80 : -->
